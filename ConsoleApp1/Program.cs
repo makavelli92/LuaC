@@ -17,6 +17,8 @@ namespace ConsoleApp1
     {
         private delegate void TB(List<Data> listBars, String[] substrings, StreamWriter SW_Command, StreamReader SR_FlagCommand, StreamWriter SW_FlagCommand);
 
+        private static Mutex mtx;
+
         private static Mutex mutexCmd;
         private static Mutex mutexDat;
 
@@ -37,6 +39,7 @@ namespace ConsoleApp1
 
         static void Main(string[] args)
         {
+            mtx = new Mutex();
             listBars = new List<Data>();
 
             try
@@ -77,7 +80,7 @@ namespace ConsoleApp1
 
             StreamReader SR_FlagCommand = new StreamReader(FlagCommand.CreateViewStream(), System.Text.Encoding.Default);
             StreamWriter SW_FlagCommand = new StreamWriter(FlagCommand.CreateViewStream(), System.Text.Encoding.Default);
-            
+
             string Msg = "";
             string flag = "";
 
@@ -89,11 +92,12 @@ namespace ConsoleApp1
             SW_FlagCommand.Write("o");
             SW_FlagCommand.Flush();
 
-            Task.Run(() => {
-                Program.SetQUIKCommandData(SW_Command, SR_FlagCommand, SW_FlagCommand, GetCommandString(Futures.SRZ7, TimeFrame.INTERVAL_TICK) + ";" + GetCommandString(Futures.SiZ7, TimeFrame.INTERVAL_TICK));
-                Program.SetQUIKCommandData(SW_Command, SR_FlagCommand, SW_FlagCommand, GetCommandString(Futures.RIZ7, TimeFrame.INTERVAL_TICK));
+            Task.Run(() =>
+            {
+              //  Program.SetQUIKCommandData(SW_Command, SR_FlagCommand, SW_FlagCommand, GetCommandString(Security.URKA, TimeFrame.INTERVAL_TICK) + ";" + GetCommandString(Security.NLMK, TimeFrame.INTERVAL_TICK));
+                Program.SetQUIKCommandData(SW_Command, SR_FlagCommand, SW_FlagCommand, GetCommandString(Futures.SRZ7, TimeFrame.INTERVAL_M5));
             });
-           
+
             // Цикл работает пока Run == true
             int m = 0;
             while (true)
@@ -104,10 +108,10 @@ namespace ConsoleApp1
                     flag = SR_Flag.ReadToEnd().Trim('\0', '\r', '\n');
                 }
                 while (flag == "o" || flag == "c");
-                
+
                 SR_Flag.BaseStream.Seek(0, SeekOrigin.Begin);
                 flag = SR_Flag.ReadToEnd().Trim('\0', '\r', '\n');
-                if(flag != "c" && (flag == "p" || flag == "l"))
+                if (flag != "c" && (flag == "p" || flag == "l"))
                 {
                     mutexDat.WaitOne();
                     ++m;
@@ -136,8 +140,8 @@ namespace ConsoleApp1
                                     SW_Memory.Write("\0");
                                 }
                                 SW_Memory.Flush();
-                                
-                                if(flag == "l")
+
+                                if (flag == "l")
                                 {
                                     //SW_Flag.BaseStream.Seek(0, SeekOrigin.Begin);
                                     //SW_Flag.Write("e");
@@ -155,7 +159,7 @@ namespace ConsoleApp1
                                     {
                                         mutexDat.ReleaseMutex();
                                         --m;
-                                        
+
                                         SR_Flag.BaseStream.Seek(0, SeekOrigin.Begin);
                                         flag = SR_Flag.ReadToEnd().Trim('\0', '\r', '\n');
                                         mutexDat.WaitOne();
@@ -164,11 +168,11 @@ namespace ConsoleApp1
                                     }
                                 }
                             }
-                           // Thread.Sleep(10);
+                            // Thread.Sleep(10);
                         }
                         while (flag != "l");
                     }
-                    if(flag == "l")
+                    if (flag == "l")
                     {
                         SW_Flag.BaseStream.Seek(0, SeekOrigin.Begin);
                         SW_Flag.Write("c");
@@ -177,7 +181,7 @@ namespace ConsoleApp1
                         SR_Memory.BaseStream.Seek(0, SeekOrigin.Begin);
                         // Считывает данные из потока памяти, обрезая ненужные байты
                         Msg += SR_Memory.ReadToEnd().Trim('\0', '\r', '\n');
-                        
+
                     }
 
                     String[] substrings = Msg.Split(';');
@@ -211,7 +215,8 @@ namespace ConsoleApp1
                     else
                     {
                         Data temp = listBars.FirstOrDefault(x => x.Name == substrings[0] && x.TimeFrame == Int32.Parse(substrings[1]));
-                        Task.Run(() => {
+                        Task.Run(() =>
+                        {
                             Program.SetQUIKCommandData(SW_Command, SR_FlagCommand, SW_FlagCommand, temp.ClassCod + ';' + temp.Name + ';' + temp.TimeFrame + ';' + temp.Time.Count);
                         });
 
@@ -259,15 +264,28 @@ namespace ConsoleApp1
             Console.WriteLine(Msg.Count());
 
         }
+
+        public static void RemoveBarsIndex(Bars bars, int index)
+        {
+            bars.Open.RemoveAt(index);
+            bars.Close.RemoveAt(index);
+            bars.High.RemoveAt(index);
+            bars.Low.RemoveAt(index);
+            bars.Volume.RemoveAt(index);
+            bars.Time.RemoveAt(index);
+        }
+
         public static void AddData(List<Data> listBars, String[] substrings, StreamWriter SW_Command, StreamReader SR_FlagCommand, StreamWriter SW_FlagCommand)
         {
             Data temp = listBars.FirstOrDefault(x => x.Name == substrings[0] && x.TimeFrame == Int32.Parse(substrings[1]));
-            
-            if(substrings[1] != "0")
+
+            if (substrings[1] != "0")
             {
                 Bars tmp = temp as Bars;
-                for (int i = 2; i < substrings.Length - 1; i = i + 6)
+                for (int i = 2; i < substrings.Length - tmp.temp; i = i + 6)
                 {
+                    if (tmp.Time.Contains(DateTime.Parse(substrings[i])))
+                        RemoveBarsIndex(tmp, tmp.Time.IndexOf(DateTime.Parse(substrings[i])));
                     tmp.Time.Add(DateTime.Parse(substrings[i]));
 
                     tmp.Open.Add(Double.Parse(substrings[i + 1], CultureInfo.InvariantCulture));
@@ -280,16 +298,25 @@ namespace ConsoleApp1
 
                     tmp.Volume.Add(Double.Parse(substrings[i + 5], CultureInfo.InvariantCulture));
                 }
-
-             //   Worker.StartStrategy(tmp);
+                if (tmp.temp > 0)
+                    tmp.temp -= 6;
+                if (tmp.temp < 6)
+                    Console.WriteLine("Stop");
+                Worker.StartStrategy(tmp);
+                Task.Run(() =>
+                {
+                    Program.SetQUIKCommandData(SW_Command, SR_FlagCommand, SW_FlagCommand, temp.ClassCod + ';' + temp.Name + ';' + temp.TimeFrame + ';' + (temp.Count));
+                });
             }
             else
             {
                 if (substrings[2] == "0")
                 {
                     temp.Count = Int32.Parse(substrings[3]);
-                    Task.Run(() => {
-                        Program.SetQUIKCommandData(SW_Command, SR_FlagCommand, SW_FlagCommand, temp.ClassCod + ';' + temp.Name + ';' + temp.TimeFrame + ';' + (temp.Count - 1));
+                    Task.Run(() =>
+                    {
+                        int tempCount = temp.Count - 1 > -1 ? temp.Count - 1 : 0;
+                        Program.SetQUIKCommandData(SW_Command, SR_FlagCommand, SW_FlagCommand, temp.ClassCod + ';' + temp.Name + ';' + temp.TimeFrame + ';' + (tempCount));
                     });
                 }
                 else
@@ -305,7 +332,7 @@ namespace ConsoleApp1
                 }
             }
             Console.WriteLine(temp.Name);
-            if(temp.Time.Count > 0)
+            if (temp.Time.Count > 0)
             {
                 Console.WriteLine(temp.Time[temp.Time.Count() - 1]);
                 Console.WriteLine(temp.Close[temp.Close.Count() - 1]);
@@ -315,8 +342,10 @@ namespace ConsoleApp1
 
         public static void SetQUIKCommandData(StreamWriter SW_Command, StreamReader SR_FlagCommand, StreamWriter SW_FlagCommand, string Data = "")
         {
-            
+            mtx.WaitOne();
+            int m = 0;
             //Если нужно отправить команду
+            Console.WriteLine($"Command - {Data}");
             if (Data != "")
             {
                 String[] substrings = Data.Split(';');
@@ -341,17 +370,41 @@ namespace ConsoleApp1
                 for (int i = 0; i < 128; i++) Data += "\0";
             }
             string flag = "";
-            
-            do
+
+            //do
+            //{
+            //    if (flag != "")
+            //        Thread.Sleep(10);
+            //  //  mutexCmd.WaitOne();
+            //    SR_FlagCommand.BaseStream.Seek(0, SeekOrigin.Begin);
+            //    flag = SR_FlagCommand.ReadToEnd().Trim('\0', '\r', '\n');
+            //    //mutexCmd.ReleaseMutex();
+            //}
+            //while (flag != "o");
+
+            while (flag != "o")
             {
                 if (flag != "")
                     Thread.Sleep(10);
+                //if (m > 0)
+                //{
+                //    mutexCmd.ReleaseMutex();
+                //    m--;
+                //}
                 SR_FlagCommand.BaseStream.Seek(0, SeekOrigin.Begin);
                 flag = SR_FlagCommand.ReadToEnd().Trim('\0', '\r', '\n');
+                //if (m == 0)
+                //{
+                //    mutexCmd.WaitOne();
+                //    m++;
+                //}
             }
-            while (flag != "o");
+            if (m == 0)
+            {
+                mutexCmd.WaitOne();
+                m++;
+            }
 
-            mutexCmd.WaitOne();
 
             SW_FlagCommand.BaseStream.Seek(0, SeekOrigin.Begin);
             SW_FlagCommand.Write("c");
@@ -363,13 +416,17 @@ namespace ConsoleApp1
             SW_Command.Write(Data);
             //Сохраняет изменения в памяти
             SW_Command.Flush();
-            Console.WriteLine("Command send from c#");
+            Console.WriteLine($"Command send from c# {Data}");
 
             SW_FlagCommand.BaseStream.Seek(0, SeekOrigin.Begin);
             SW_FlagCommand.Write("r");
             SW_FlagCommand.Flush();
-
-            mutexCmd.ReleaseMutex();
+            if (m > 0)
+            {
+                mutexCmd.ReleaseMutex();
+                m--;
+            }
+            mtx.ReleaseMutex();
         }
     }
     public enum TimeFrame

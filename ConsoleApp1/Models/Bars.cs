@@ -72,5 +72,15 @@ namespace ConsoleApp1
         public List<int> indexFractalHigh { get; set; }
 
         public List<int> indexFractalsLow { get; set; }
+
+        public int temp = 100;
+
+        public DateTime LastTime
+        {
+            get
+            {
+                return Time[Count - 1];
+            }
+        }
     }
 }
