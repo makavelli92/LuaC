@@ -29,6 +29,9 @@ namespace ConsoleApp2
 
         static void Main(string[] args)
         {
+            decimal t = (decimal)610.9;
+            decimal y = (t / (decimal)0.05) - (int)(t / (decimal)0.05);
+
             //  int temp = (int)Class.SPBFUT;
             //List<double> temp = new List<double> { 1, 1, 1, 1, 1, 1 };
             //temp.RemoveAll(x => x == 1);

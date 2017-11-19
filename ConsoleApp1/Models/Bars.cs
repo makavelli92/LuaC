@@ -82,5 +82,22 @@ namespace ConsoleApp1
                 return Time[Count - 1];
             }
         }
+        public DateTime From
+        {
+            get
+            {
+                return new DateTime(2017, 11, 17, 10, 00, 00);
+            }
+        }
+
+        public double StepPrice { get; set; }
+
+        public int StepCount { get; set; } = 0;
+
+        public int SecondsCycle { get; set; } = 120;
+
+       // public override bool FlagAccess { get; set; } = false;
+
+        public string ProcessType { get; set; } = "Accept";
     }
 }

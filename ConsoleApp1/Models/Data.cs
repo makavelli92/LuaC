@@ -21,5 +21,7 @@ namespace ConsoleApp1
         public virtual List<double> Volume { get; set; }
 
         public virtual int Count { get; set; }
+
+    //    public virtual bool FlagAccess { get; set; } = false;
     }
 }

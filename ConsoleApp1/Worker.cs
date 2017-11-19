@@ -13,14 +13,44 @@ namespace ConsoleApp1
             int lastIndex = 0;
             if (bars.MovingAverage != null)
                 lastIndex = bars.MovingAverage.Count - 1;
+            if (bars.StepPrice == 0)
+                CalculateStepPrice(bars);
 
             if (bars.MovingAverage != null && bars.MovingAverage.Count > 0)
                 DeleteLastData(bars);
 
             MovingAverageCalculate(bars);
             FractalCalculate(bars, lastIndex);
-            
-            Console.WriteLine("Good Job!");
+
+            Strategy.FindSignal(bars, EventSignal);
+        }
+        static void CalculateStepPrice(Bars bars)
+        {
+            decimal stepPrice = 0;
+            List<decimal> temp = new List<decimal>()
+            {
+            (decimal)10, (decimal)1, (decimal)0.5, (decimal)0.1, (decimal)0.05, (decimal)0.01, (decimal)0.005, (decimal)0.00005, (decimal)0.00001
+            };
+
+            foreach (decimal i in temp)
+            {
+
+                for (int bar = 0; bar < bars.Count; bar++)
+                {
+                    if (((decimal)bars.High[bar] / i) - (int)((decimal)bars.High[bar] / i) != 0)
+                        break;
+                    if (bar == bars.Count - 1)
+                        stepPrice = i;
+                }
+                if (stepPrice != 0)
+                    break;
+            }
+            bars.StepPrice = Convert.ToDouble(stepPrice);
+        }
+
+        static void EventSignal(object e, string str)
+        {
+            Console.WriteLine("{0} - {1}\n", str, DateTime.Now);
         }
 
         public static void DeleteLastData(Bars bars)
@@ -56,7 +86,7 @@ namespace ConsoleApp1
 
                     for (int j = fractalUp - bars.sdvig >= 0 ? fractalUp - bars.sdvig : 0; j < fractalUp; j++)
                     {
-                        if (bars.High[j] > bars.MovingAverage[j + bars.sdvig])
+                        if (bars.High[j] > /*bars.MovingAverage[j + bars.sdvig]) ;*/(bars.MovingAverage.Count - 1 >= j + bars.sdvig? bars.MovingAverage[j + bars.sdvig]: bars.MovingAverage.Last()))
                         {
                             if (!bars.indexFractalHigh.Contains(j))
                                 bars.indexFractalHigh.Add(j);
@@ -79,7 +109,7 @@ namespace ConsoleApp1
 
                     for (int j = fractalDown - bars.sdvig >= 0 ? fractalDown - bars.sdvig : 0; j < fractalDown; j++)
                     {
-                        if (bars.Low[j] < bars.MovingAverage[j + bars.sdvig])
+                        if (bars.Low[j] < /*bars.MovingAverage[j + bars.sdvig]*/ (bars.MovingAverage.Count - 1 >= j + bars.sdvig? bars.MovingAverage[j + bars.sdvig]:bars.MovingAverage.Last()))
                         {
                             if (!bars.indexFractalsLow.Contains(j))
                                 bars.indexFractalsLow.Add(j);
@@ -96,12 +126,12 @@ namespace ConsoleApp1
                     }
                 }
             }
-            //bars.indexFractalHigh.Sort();
+            bars.indexFractalHigh.Sort();
             //foreach (int i in bars.indexFractalHigh)
             //{
             //    Console.WriteLine("High" + bars.Time[i]);
             //}
-            //bars.indexFractalsLow.Sort();
+            bars.indexFractalsLow.Sort();
             //foreach (int i in bars.indexFractalsLow)
             //{
             //    Console.WriteLine("Low" + bars.Time[i]);
@@ -111,8 +141,15 @@ namespace ConsoleApp1
             //{
             //    Console.WriteLine("Low" + bars.MovingAverage[i]);
             //}
-            Console.WriteLine(bars.Time[bars.Time.Count - 1]);
-            Console.WriteLine(bars.MovingAverage[bars.MovingAverage.Count - 1]);
+            ShowData(bars);
+        }
+
+        public static void ShowData(Bars bars)
+        {
+            Console.WriteLine(bars.LastTime);
+
+            // Console.WriteLine("Count " +  bars.indexFractalsLow.Count);
+            // Console.WriteLine("Last " + bars.Time[bars.indexFractalsLow.Last()]);
         }
 
         public static int FindFractalHigh(int i, double period, List<double> high)
@@ -199,22 +236,18 @@ namespace ConsoleApp1
                 case "Close":
                     {
                         return bars.Close[index];
-                        break;
                     }
                 case "High":
                     {
                         return bars.High[index];
-                        break;
                     }
                 case "Low":
                     {
                         return bars.Low[index];
-                        break;
                     }
                 case "Median":
                     {
                         return (GetBarsValue(bars, index, "High") + GetBarsValue(bars, index, "High")) / 2;
-                        break;
                     }
                 default:
                     return 0;
